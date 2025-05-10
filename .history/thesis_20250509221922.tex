@@ -1,0 +1,292 @@
+\documentclass{pkuthesis}
+\newcommand{\preTitleCn}{}
+\newcommand{\preTitleEn}{}
+\newcommand{\titleCn}{基于强化学习的法律推理模型}
+\newcommand{\titleEn}{Lawyer-Zero-7B}
+\newcommand{\studentName}{王昱琛}
+\newcommand{\studentID}{2100013153}
+\newcommand{\schoolName}{北京大学}
+\newcommand{\majorIn}{智能科学与技术}
+\newcommand{\tutorName}{冯岩松}
+\usepackage[style=gb7714-2015]{biblatex}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsfonts}
+\usepackage{geometry}
+\geometry{a4paper, margin=1in}
+\usepackage{hyperref}
+\hypersetup{
+    colorlinks=true,
+    linkcolor=blue,
+    filecolor=magenta,
+    urlcolor=cyan,
+}
+\usepackage{enumitem} % For customizing lists
+\usepackage{graphicx}
+\defbibheading{bibliography}[\refname]{
+    \section*{#1}
+    \addcontentsline{toc}{section}{#1}
+    \vspace*{16.5pt}
+}
+\addbibresource{ref.bib}
+\begin{document}
+
+
+% \tableofcontents
+\newpage
+
+\section{引言}
+\subsection{研究背景}
+随着人工智能技术的飞速发展，大语言模型（LLM）在自然语言处理（NLP）领域取得了显著进展，特别是在推理、理解和生成等任务中表现优异。然而，法律领域具有其独特的复杂性与挑战性，主要体现在法律问题的答案往往具有多样性，且法律知识的推理过程较为复杂，这使得在法律领域应用强化学习（RL）技术更加困难。现在的大模型的推理能力，基本是通过数学或者代码进行训练而产生的，但现实生活中，其他领域也会需要强大的推理能力，所以理论上，大语言模型应该也能通过其他领域的复杂问题提升自己的推理能力。
+
+传统的RL方法在处理具有明确答案的任务时表现优异，但在面对法律领域这种存在多种合理解读的情形时，设计合适的奖励模型成为一大难题。因此，如何有效地构建法律推理模型，并通过RL技术优化其推理过程，成为了当前亟待解决的问题。
+
+最近的工作，比如 DeepSeek-R1，Qwen 系列等模型探索了强化学习算法（如 GRPO，PPO 等）增强大语言模型的推理能力的方式。这些研究表明，通过仅提供问题和答案，模型可以通过RL算法自发地学习正确的推理方法（Guo等，2025）。DeepSeek-R1（Guo等，2025）和QWQ（Team，2025）说明了如何在数学和编码任务中实现这一目标，而最近的许多努力已经在这些领域中复制了“AHA时刻”（Yeo等，2025; Zeng et al.，2025; Luo等，2025; Luo等，2025）。但是，在其他领域（例如法律）进行有限的尝试。对数学和编码任务的关注是由于基本答案的可用性，可以使用确定性算法轻松验证（Mercer等，2025）。这对于依赖基于结果的奖励的RL算法至关重要。结果的正确性是指导大型学习过程的唯一监督信号。对结果的错误验证可能会导致模型学习错误的政策和训练失败（Weng，2024）。
+
+但是，评估开放式问题的答案的正确性是具有挑战性的，因为许多正确的答案通常强调不同的点或使用不同的分析框架，并具有不同的表达方式。可能不可能枚举所有这些都形成黄金参考集。这使设计基于规则和基于模型的奖励模型变得困难，而后者也很容易受到影响（Weng，2024）。肯定要挑战模型是否没有作为人类专家的强大法律推理能力。要在缺乏有效结果奖励模型的法律等领域中应用RL算法，我们通过仅通过一个或多个答案探索多项选择问题来提出RL训练方法（MCQ+）。我们的方法涉及两个主要步骤：构建需要特定于域的推理的MCQ+，并用GRPO训练模型。在RL中使用MCQ+的主要优点是双重的。首先，MCQ+提供了确定的答案，这大大简化了基于规则的奖励模型的开发。与在不受约束的答案空间内运行的自由形式不同，MCQ+预先定义了一组有限的候选选项。LLM需要评估这些选项的正确性，从而在有限且可验证的答案空间内运行。这可以使精确的奖励分配并促进实施基于规则的奖励机制。其次，与其他问题类型相比，MCQ+格式需要更强大的推理和知识获取，例如True/False问题或单人答案的多人技术问题（MCQ），该问题也可以使用基于规则的奖励模型进行评估。MCQ+需要对所有可能的选项及其组合进行详尽的评估。该要求确保模型必须仔细检查每个选项并认识到它们之间的细微差异。正式提供正面奖励，以提供完全准确的答案；任何不正确或丢失的选项都不会导致任何奖励。这种严格的加强机制强制实施了所有可能性的全面考虑，从而与我们旨在通过强化学习灌输的严格推理过程保持一致。
+
+在构建基于推理的多项选择问题的第一步中，我们从中国国家司法审查中选择了10,561个问题。这些问题是基于案例的，每个问题都基于特定的事实描述。收集到的数据集涵盖了中国的主要法律领域，例如民法，刑法和程序法，甚至需要对专业律师进行深入思考和严格的推理。使用基于案例的问题来训练与基于案例的法律教学的核心原则相一致，该教学源自哈佛法学院，专注于深度法律分析和解决问题的技能，而不是死记硬背的记忆（Patterson，1951年）。这种方法要求该模型澄清法律关系，确定适用的法律并在复杂场景中进行全面的推理，从而增强其法律推理的能力。我们认为，这种方法不仅可以提高模型在MCQ+上的性能，还可以使其能够转移获得的知识和技能以解决更广泛的法律任务。
+
+在RL训练的第二步中，我们使用QWEN2.5-7B教学（Team，2024; Yang等，2024）作为基本模型，并使用GRPO算法进行训练。我们设置了两种类型的奖励：一种是准确性奖励，一种严格的奖励机制，仅当模型选择所有正确的选项时才提供积极的反馈，而否则零奖励。另一个是格式奖励，它要求模型的响应包括 \texttt{<think>} 和 \texttt{<答案>} 标签的结构，以在解决问题时清楚地概述模型的推理过程。在大约两个时期的训练之后，与QWEN2.5-7B实验室相比，由此产生的Deep-Lawyer-Zero-7b模型将准确性从$29.5\%$提高到$57.0\%$，从而验证了训练的有效性。为了探索基于MCQ+的RL是否可以真正增强模型的法律分析能力，我们使用Lexeval（Li等，2025）来评估法律领域中六种类型的能力，例如理解，逻辑推理和一代。结果表明，与QWEN2.5-7B-Instruct相比，接受RL训练的模型在所有能力方面都取得了显着提高，平均增加了$16.0\%$。此外，此RL方法的表现优于简单的蒸馏方法。例如，使用与DeepSeek R1的答案相同的多项选择问题进行监督的填充（SFT），将QWEN2.5-7B教学的提高仅$2.9\%$，远小于通过我们的MCQ+ RL训练获得的改进。这表明我们提出的方法是增强模型的法律推理能力的有效且可靠的方法。
+
+进一步的分析表明，在RL训练后，模型的推理过程大大改善。它偏爱利用相关的法律理论，例如犯罪的要素，通过各种镜头剖析问题。它还可以为当前事实找到更多适当的文章。使用不同的观点或逐项分析，它的响应变得更加结构化。此外，该模型的推理路径缩短了正确回答问题的问题，表明更有效地解决问题以实现更简单的任务。相反，对于错误的答案，观察到较长的推理路径，这表明对复杂场景的更多探索。这种现象与在数学领域的观察（Wang等，2025）。我们的贡献如下：
+\begin{enumerate}
+    \item 我们提出了MCQ+ RL，这是一种基于一个或多个答案的多项选择问题（MCQ+）的新RL方法，为在缺乏有效结果奖励模型的域中应用RL提供了解决方案。
+    \item 我们将MCQ+ RL方法应用于法律领域，建立法律推理模型，Deeplawyer-Zero-7B，并验证了这种方法的可行性。
+    \item 通过详细的分析，我们证明了该模型可以从MCQ+学习复杂的推理能力，从而在各种法律推理能力中显着超过了从DeepSeek R1蒸馏的基本模型和模型。
+\end{enumerate}
+
+\subsection{研究目标与贡献}
+本研究旨在探索后训练方法（包括强化学习和监督微调的结合）在法律领域中的应用，特别是聚焦于通过强化学习优化大语言模型的法律推理能力。我们提出了一种基于不定项多选题（MCQ+）的强化学习方法，利用MCQ+的多答案特性设计了规则基础的奖励模型，从而使得模型能够在复杂的法律问题上进行有效推理。
+
+本研究的主要贡献包括：
+\begin{itemize}
+    \item 提出了一种创新的RL方法，结合了强化学习与监督微调（SFT）的混合训练方式，提升了大语言模型在法律领域的推理能力。
+    \item 通过使用中国国家司法考试（法考）中的10,561个基于案件的MCQ+问题进行训练，验证了我们方法的有效性。
+    \item 我们的研究不仅为LLM提供了法律推理能力的进一步提升，也为其他领域在缺乏有效奖励模型的情况下借助RL方法带来新的思路和方法。
+    \item 本文开源了我们的训练代码和数据，以促进其他研究者和从业者在类似领域中的进一步探索与应用。
+\end{itemize}
+
+\subsection{论文结构}
+本文结构安排如下：
+\begin{itemize}
+    \item 第二章为相关工作，回顾了强化学习在大语言模型中的应用以及法律推理领域的相关研究。
+    \item 第三章详细介绍了本文提出的强化学习方法及其与监督微调的混合训练方法。
+    \item 第四章介绍了实验设计和数据集的选择，重点介绍了中国国家司法考试的MCQ+问题数据集。
+    \item 第五章展示了实验结果，并通过与其他方法进行对比，分析了我们方法的优越性。
+    \item 第六章对研究进行了讨论，分析了方法的优势与挑战，并提出了未来可能的改进方向。
+    \item 第七章为结论，总结了本文的研究成果，并展望了未来的研究方向。
+\end{itemize}
+
+\section{相关工作}
+近年来，强化学习被广泛应用于大语言模型（LLM）的微调与对齐过程。其中，基于人类反馈的强化学习（RLHF）成为主流技术，用于训练奖励模型以捕获人类偏好，并以此优化语言模型的输出策略。此类方法通常引入额外的奖励模型 $r_{\phi}(x, y)$ 对输出进行评分，通过近端策略优化（PPO）等算法进行策略更新 $\pi_{\theta}(y \mid x)$，使模型行为更符合人类预期。此外，也有研究提出使用人工智能系统提供的反馈（RLAIF）或直接偏好优化（DPO）等替代策略，以减少奖励模型训练的复杂度。这些技术的提出表明，RL工具箱中的多种方法均可用于增强LLM的能力和可控性。
+
+LLM的后训练（post-training）技术旨在超越通用预训练模型，在特定领域或任务上进一步提升性能。Tie等人提出的PoLMs概念将后训练方法划分为微调、对齐、推理、效率、集成与适应等五大范式。这一研究指出，LLM预训练模型在专业领域（如法律）应用中存在推理能力有限、伦理不确定性和领域适应性差等瓶颈，从而催生了如OpenAI-o1/o3和DeepSeek-R1等大型后训练模型（LRMs）的发展。具体而言，后训练策略包括利用领域专用数据进行微调、通过RLHF进行人类偏好对齐，以及设计复杂训练流程以增强多步推理能力。这些方法共同构建了LLM从通用能力向领域能力演进的研究框架。
+
+在法律推理领域，研究者已经开始探索LLM的应用潜力，但依然面临严苛要求和挑战。文献指出，法律应用要求极高的准确性、可重复性和透明度，而目前的LLM在复杂合同和案例分析中尚无法达到这些标准。例如，Kant等人提出将LLM与符号逻辑相结合的神经符号方法，以提高法律合同分析的可靠性。同时，针对法律领域的评测和综述工作逐渐增多。Lai等对法律LLM进行了系统综述，强调法律领域中的LLM应用仍处于早期阶段，面临数据质量、算法局限和法律实务差异等多重挑战。总体而言，这些研究表明，尽管LLM在法律推理中展现出一定的潜力，但要满足司法应用的高标准仍需不断改进模型能力和可信性。法律领域的LLMS大语模型的进步激发了其在多个领域的应用，尤其是法律领域的兴趣。已经开发了几种专门模型，以供法律理解和产生。律师美洲驼（Huang et al.，2023）是法律任务的绿色羊石版本，在案例分析和法律推理中证明了绩效的提高。Chatlaw（Cui等，2023）利用法律知识检索，专家的混合和多代理方法来增强法律领域的能力。Lawgpt（Zhou等，2024）在此域特异性数据集中构建了一个法律域数据集以及高质量的法律质量质量质量质量质量标准和中国基本模型。这些作用突出了LLM在法律领域中的潜力，但大部分仅限于监督的微调。我们的工作应用了LLM训练中的强化学习方法，刺激其推理和推广能力。DeepSeek R1成功（DeepSeekai，2025）的大型语言模型增强学习，最近的工作着重于利用强化学习方法来增强大语言模型的推理能力。诸如近端策略优化（PPO）之类的多种方法（Schulman等，2017），（GRPO）（Shao等，2024b），增强++（HU，2025）已应用于后训练，并结合了基于规则的准确性奖励和格式奖励。这种训练后的程序表明在数学问题中有效性（Hu等，2025; Zeng等，2025; Pan等，2025）。Huggingface（2025）利用更复杂的奖励，例如余弦计划的奖励和重复奖励（Yeo等，2025），以进一步提高推理能力并稳定训练后过程。此外，Xie等。（2025）训练该模型的简单逻辑难题，并观察数学问题的显着改善，这表明增强学习可能意味着在范围外的概括中可能有很大的潜力。
+
+在评测法律任务时，多选题（MCQ）形式经常被用于衡量模型能力。例如，中国的LawBench评测基准包含了单标签分类和多标签分类等任务，其中的多标签分类等价于多项选择题。与仅含单一选择题的早期基准不同，LawBench还增加了法律实体识别、阅读理解、咨询等多种任务，以更贴近实际法律应用场景。美国的LegalBench基准则收录了162个法律推理任务，涵盖了广泛的案件分析与法规检索问题。这些基准的设计暗示，仅使用传统多项选择题进行评测可能无法全面衡量模型的法律推理能力，需要结合更复杂的任务类型来评估LLM在法律领域的综合表现。
+
+在系统和工具方面，针对RLHF训练出现了一些创新框架。例如，Sheng等人提出的HybridFlow框架设计了一种混合控制器编程模型，用以高效执行复杂的RLHF数据流。该框架结合了单控制器和多控制器范式的优点，实现了对计算与通信流程的灵活编排，据报告在运行多种RLHF算法时可带来1.5~20.5倍的吞吐量提升。基于HybridFlow理念，由ByteDance Seed团队开发了开源的verl（Volcano Engine RL for LLMs）库。verl提供了易于扩展的API，可快速实现各种RL算法（如PPO、GRPO等），并支持与现有LLM训练基础设施（如FSDP、Megatron-LM、vLLM推理引擎、SGLang等）的无缝集成。此外，verl通过高效的多阶段模型重分片技术（3D-HybridEngine），消除了训练与推理切换时的内存冗余，从而进一步提升了大型模型训练的资源利用效率。
+
+除了模型训练框架，推理阶段的高效引擎也是研究热点。vLLM是一个面向LLM推理的高吞吐量库，采用分页注意力（Paged Attention）等技术来优化GPU内存管理。实验结果表明，与传统的HuggingFace Transformers和OpenAI TGI等框架相比，vLLM在相同硬件资源下可实现数倍以上的吞吐量提升，同时大幅减少KV缓存浪费。vLLM支持多种主流模型架构（如LLaMA、Mistral、Granite、DeepSeek等），并提供量化与工具调用等扩展功能。这些优化使得在法律等领域部署大型LLM时，推理效率和可扩展性得到显著提高。
+
+\section{方法}
+在本研究中，我们采用了多种基于强化学习（Reinforcement Learning, RL）的方法对大语言模型（LLM）进行后训练，以提升其在法律推理任务中的表现。特别地，我们重点引入了\textbf{Group Relative Policy Optimization（GRPO）}算法，这是一种对传统近端策略优化（Proximal Policy Optimization, PPO）算法的重要改进，显著减少了对价值函数（Value Function）模型的依赖，同时在数学推理等高阶任务中展现出更优性能。
+
+\subsection{基于人类偏好的强化学习（RLHF）流程}
+我们首先采用标准的基于人类反馈的强化学习（RLHF）方法对预训练语言模型进行微调。该流程包括以下几个关键步骤：
+\begin{enumerate}
+    \item \textbf{奖励模型训练}：使用人工标注的偏好对样本对（prompt $x$, response $y_1$, response $y_2$）进行训练，使奖励模型 $r_{\phi}(x, y)$ 能够根据提示 $x$ 和回答 $y$ 评估回答质量。
+    \item \textbf{策略优化}：在奖励模型的指导下，通过策略梯度方法优化语言模型策略 $\pi_{\theta}(y \mid x)$，提高其生成高分回答的能力。
+\end{enumerate}
+近端策略优化（PPO）（Schulman等，2017）是一种参与者-批评RL算法，在LLMS的RL微调阶段广泛使用（Ouyang等，2022）。然而，传统RLHF流程中的PPO方法需要联合训练一个额外的值函数网络（critic），这不仅增加了计算开销，也可能引入额外的不稳定性。因此，我们进一步引入了GRPO算法以替代PPO。
+
+\textbf{PPO 方法}： 该方法是一种基于策略梯度的算法，通常结合值函数和广义优势估计（GAE）来估计策略的优势函数 $\hat{A}_t$，并在奖励中加入 KL 散度惩罚项以稳定训练过程。PPO的优化目标通常表示为：
+$$L^{PPO}(\theta) = \mathbb{E}_{(x,y) \sim D_{\pi_{\text{ref}}}} \left[ r_{\text{model}}(x, y) - \beta \text{KL}(\pi_{\theta}(y \mid x) \| \pi_{\text{ref}}(y \mid x)) \right]$$
+其中 $r_{\text{model}}(x, y)$ 是奖励模型对生成结果 $y$ 的评分，$\pi_{\text{ref}}$ 是参考策略（通常为经过监督微调的预训练模型），$\beta$ 是 KL 惩罚系数。
+策略更新则采用带有截断（clipping）的代理目标函数：
+$$ L^{CLIP}(\theta) = \hat{\mathbb{E}}_t \left[ \min(r_t(\theta)\hat{A}_t, \text{clip}(r_t(\theta), 1-\epsilon, 1+\epsilon)\hat{A}_t) \right] $$
+其中 $r_t(\theta) = \frac{\pi_{\theta}(a_t \mid s_t)}{\pi_{\theta_{\text{old}}}(a_t \mid s_t)}$ 是当前策略与旧策略在时刻 $t$ 采取动作 $a_t$ 的概率比值，$\hat{A}_t$ 是通过 GAE 计算得到的优势估计值。该优化目标结合了概率比值和截断机制，可以在策略更新时限制步长，提升训练稳定性。然而，传统的 PPO 在大规模语言模型中存在两大挑战：一方面，为了计算 GAE，算法需要额外训练一个值函数网络来估计状态的基线价值，这对模型参数规模和训练成本的要求极高；另一方面，在文本生成任务中通常只有序列生成结束时才有一个整体的回报信号（例如最后一个 token 的反馈），这导致对中间状态的价值估计非常困难，从而影响训练过程的稳定性和效率。
+
+\textbf{GRPO 方法}： 该方法不使用显式的值函数网络，而是通过对一个输入提示下生成的多个样本进行相对比较来构造优势信号：具体而言，对于每个提示 $x$，从当前策略中采样生成 $K$ 个不同的回答 $\{y_1, y_2, \dots, y_K\}$，并利用奖励模型对这 $K$ 个回答分别打分 $r_i = r_{\phi}(x, y_i)$。接着对这些得分应用 Softmax 函数（或其他归一化方法），得到每个回答的相对得分 $\alpha_i$，该得分反映了该回答在组内的相对好坏。例如，使用Softmax：
+$$ \alpha_i = \frac{\exp(r_i / \tau)}{\sum_{j=1}^K \exp(r_j / \tau)} $$
+其中 $\tau$ 是温度参数。然后基于所有回答得分的均值，定义第 $i$ 个回答的相对优势为：
+$$ A(x, y_i) = \alpha_i - \frac{1}{K} \sum_{j=1}^K \alpha_j $$
+换言之，如果某个回答的评分高于组内均值，则该回答获得正的优势，否则获得负的优势。GRPO 通过这种组内比较直接给出了一个相对评估，无需训练额外的值函数。在策略更新阶段，GRPO 仍采用与 PPO 相似的目标函数格式：是一种强化学习算法，通过在一组采样动作之间使用相对比较来优化策略，而不是依赖于外部批评模型来估计价值函数。我们选择使用GRPO进行基于规则的奖励进行加固学习，因为很难在法律领域建立可靠的奖励模型。带有奖励 $R = \{r_1, r_2, \dots, r_K\}$ 的输出 $O = \{o_1, o_2, \dots, o_K\}$ （此处 $o_i$ 即 $y_i$）的优势被计算为每个组中的归一化奖励：
+$$ L^{GRPO}(\theta) = \hat{\mathbb{E}}_{(x, y_i) \sim \pi_{\theta_{\text{old}}}} \left[ \min(r_{\theta}(x,y_i)A(x,y_i), \text{clip}(r_{\theta}(x,y_i), 1-\epsilon, 1+\epsilon)A(x,y_i)) \right] $$
+其中 $r_{\theta}(x, y_i) = \frac{\pi_{\theta}(y_i \mid x)}{\pi_{\theta_{\text{old}}}(y_i \mid x)}$。由于不需要值函数网络，GRPO 在内存占用和计算开销上显著减少，更加适用于大模型场景的训练。总体而言，PPO 借助值函数和 GAE 来估计优势并稳定训练，而 GRPO 则通过多样本群体比较直接构造优势信号，后者在模型参数规模庞大且奖励稀疏时能够提高资源利用效率和训练稳定性。
+
+\subsection{Group Relative Policy Optimization（GRPO）}
+GRPO 是一种无需值函数的策略优化算法，其核心思想是通过模型自身生成的一组回答样本进行相对评分，进而估计优势函数（Advantage Function），从而更新策略。该方法具有如下特点：
+\begin{enumerate}
+    \item \textbf{无需训练值函数模型}：传统PPO中的优势函数估计依赖于值函数 $V(x)$。而GRPO摒弃了值函数模型，完全基于策略本身采样的相对信息。
+    \item \textbf{样本组评分机制}：给定一个输入 $x$，从当前策略 $\pi_{\theta}$ 中生成多个回答 $\{y_1, \dots, y_K\}$，并利用奖励模型对它们打分：
+    $$ r_i = r_{\phi}(x, y_i), \quad i = 1, \dots, K $$
+    然后按照打分结果对样本进行排序，并为每个样本分配一个排名权重 $\alpha_i$（例如，通过Softmax归一化后的得分），用于构造相对优势。
+    \item \textbf{优势函数估计}：
+    $$ A(x, y_i) = \alpha_i - \frac{1}{K} \sum_{j=1}^K \alpha_j $$
+    其中 $\alpha_i$ 可以为softmax函数输出（例如温度控制的归一化打分），或者为单调映射的排名指标（如逆序数）。
+    \item \textbf{策略更新目标}：
+    类似PPO，GRPO仍使用一个裁剪（clipping）策略目标来限制策略偏移，但其优势函数来源不同：
+    $$ L^{GRPO}(\theta) = \hat{\mathbb{E}}_{(x,y_i) \sim \pi_{\theta_{\text{old}}}} \left[ \min(r_{\theta}(x,y_i)A(x,y_i), \text{clip}(r_{\theta}(x,y_i), 1-\epsilon, 1+\epsilon)A(x,y_i)) \right] $$
+    其中：
+    $$ r_{\theta}(x, y) = \frac{\pi_{\theta}(y \mid x)}{\pi_{\theta_{\text{old}}}(y \mid x)} $$
+\end{enumerate}
+这种设计不仅去除了对值函数的依赖，还充分利用了语言模型自生成内容的结构性差异，从而在训练资源受限的情况下提高样本效率。
+
+\subsection{用于长链推理的 DAPO 算法}
+为进一步提升模型在长链推理（Chain-of-Thought, CoT）场景下的能力，我们还采用了近期提出的\textbf{Decoupled Clipped and Dynamic Sampling Policy Optimization（DAPO）}算法。DAPO的关键创新在于：
+\begin{itemize}
+    \item 解耦裁剪策略与优势函数计算；
+    \item 引入动态样本重采样机制，优先保留对训练目标贡献更大的样本；
+    \item 结合 verl 框架，在大规模训练中保持训练稳定性和效率。
+\end{itemize}
+据已有研究报道，DAPO 能显著减少长链推理任务中的训练步骤，提升推理精度与生成质量，尤其适用于逻辑密集型的法律问答任务。
+
+\subsection{奖励函数}
+\textbf{格式奖励}。格式奖励的核心目标是实施指导模型推理过程的结构性约束，以确保其响应遵守特定的逻辑框架。具体来说，我们要求模型的输出包括以下结构：\texttt{<think>} 标签和 \texttt{<答案>} 标签，它们在解决问题时明确概述了模型所采取的推理路径（Guo等，2025）。例如，这可能涉及在法律问题中确定有争议的观点，召回相关的法规或判例法，并比较不同的法律概念。
+
+\textbf{准确性奖励}。传统的True/False或多项选择问题在2或4个选项中有一个正确的答案。通常可以通过不完整或表面的推理来解决它们，因为有限的答案空间使模型可以在不完全理解基本概念的情况下获得正确的答案。这种局限性使此类格式在训练强大的推理能力方面的有效性降低了，尤其是在法律等复杂领域。相比之下，具有一个或多个正确答案的MCQ+问题要求该模型可以全面评估每个选项的正确性，而没有猜测或部分推理的空间。
+我们设计了一个严格的奖励机制，仅当模型在所有其他情况下都可以选择所有正确的选项并分配零奖励（奖励$=0$）时，才能提供积极的反馈（奖励$=1$）。令 $S_{\text{true}}$ 为MCQ+问题的正确选项集合，$S_{\text{pred}}$ 为模型预测的选项集合。则准确性奖励 $R_{\text{accuracy}}$ 定义为：
+$$ R_{\text{accuracy}}(S_{\text{pred}}, S_{\text{true}}) = \begin{cases} 1 & \text{if } S_{\text{pred}} = S_{\text{true}} \\ 0 & \text{otherwise} \end{cases} $$
+例如，对于图1（b）中的情况，只有在模型预测A和B时，模型才会获得正奖励。当模型预测其他任何内容时，它将获得零奖励。它确保正确的选项与准确和完整的推理过程相关联。这种严格的奖励机制消除了在强化学习过程中基于捷径的解决方案的可能性，并迫使该模型对当前的任务有了更深入的了解。
+
+\section{实验}
+\subsection{训练数据集}
+我们使用JEC-QA数据集（Zhong等，2020）作为训练数据。JEC-QA是来自中国国家司法审查的法律领域中的大规模提问数据集。该数据集包含一个或多个正确答案的26,365个多项选择问题。JECQA中的问题包含两种类型的问题，知识驱动的问题和案例分析问题。我们选择训练的案例分析问题，因为它们专注于深度法律分析和解决问题的技能，而不是死记硬背的记忆（Patterson，1951）。解决此类问题需要该模型澄清法律关系，确定适用的法律并在复杂场景中进行全面的推理，从而增强其法律推理能力。我们将10,561个分析问题分为训练和测试集的8：2比率，用于训练和域中验证。
+
+\subsection{Baselines}
+\begin{itemize}
+    \item \textbf{Qwen2.5-7b-教学}：中国领域最强大的LLM之一（Team，2024; Yang等，2024）。我们评估法律领域的零射击性能作为参考。
+    \item \textbf{R1蒸馏}：基于QWEN2.5-7B教学的训练数据中的R1回答对R1的回答。提炼强大的模型可以显着提高数学和编码中较小模型的性能（Guo等，2025）。该模型是蒸馏方法的基线。
+\end{itemize}
+
+\subsection{实施详细信息}
+\subsubsection{RL设置}
+本研究的强化学习阶段采用开源库 Verl (Sheng et al., 2024) 来实现组相对策略优化 (GRPO) 算法。Verl 作为一个专为大规模语言模型设计的强化学习工具库，提供了高效、可扩展的训练流程。下面将结合 Verl 的特性，详细阐述 GRPO 的具体实现步骤：
+
+\paragraph{1. 初始化与核心组件：}
+在 Verl 框架中，GRPO 的训练流程主要由 `GRPOTrainer` 类进行管理。初始化阶段需要配置核心组件，包括：
+\begin{itemize}
+    \item \textbf{策略模型 (Actor Model)}: 即我们用作基座的 QWEN2.5-7B-Instruct 模型，负责根据当前策略生成回答。
+    \item \textbf{参照模型 (Reference Model)}: 通常是经过监督微调 (SFT) 的同架构模型，用于计算 KL 散度惩罚，以稳定训练过程，防止策略模型偏离过远。
+    \item \textbf{奖励模型/函数 (Reward Model/Function)}: 在本研究中，我们采用基于规则的奖励函数（格式奖励和准确性奖励），直接在 Verl 的流程中计算得出，无需外部独立的奖励模型。
+\end{itemize}
+
+\paragraph{2. Rollout Generation:}
+此阶段的目标是使用当前策略模型 $\pi_{\theta}$ (Actor Model) 收集与环境交互的经验数据。在强化学习中，“Rollout”指从特定状态开始，遵循某一策略执行一系列动作并观察状态转移和奖励的过程。在LLM的上下文中，“某一策略”即指当前Actor Model的状态，“执行一系列动作”则对应于模型接收输入提示 (prompt) 并生成回应 (response) 的推理过程。
+
+在 Verl 框架中，经验收集的具体实现涉及以下关键机制和步骤：
+
+\begin{itemize}
+    \item \textbf{最新策略的同步与准备}:
+    为了确保经验收集使用的是最新的策略，Verl 在每个主要的训练迭代（大 step）开始时，会执行权重同步操作。通过 \texttt{RolloutShardingManager} (其基类为 \texttt{BaseShardingManager}) 机制，在实际执行序列生成 (\texttt{generate\_sequences}) 之前，\texttt{Actor Model} 最新的模型参数会被同步到负责推理的组件（如基于 vLLM 或 SGLang 的 \texttt{Rollout} 实例）。具体而言，在 \texttt{ActorRolloutRefWorker} 的 \texttt{generate\_sequences} 方法中，相关操作被 \texttt{with self.rollout\_sharding\_manager:} 上下文管理器包裹。该管理器的 \texttt{\_\_enter\_\_} 方法负责实现将训练节点（如FSDP训练的Actor Model）的权重同步到推理节点的逻辑，从而保证了后续的推理过程使用的是刚刚更新过的模型权重。
+
+    \item \textbf{提示采样与批量处理}:
+    从训练数据集中获取一批输入提示 (prompts)。Verl 的 \texttt{ActorRolloutRefWorker} 中的 \texttt{generate\_sequences} 方法负责处理这批提示，并调用底层的推理引擎（如 \texttt{vLLMRollout}）进行实际的序列生成。
+
+    \item \textbf{多重响应生成 ($K$个样本)}:
+    GRPO 算法要求对每一个输入提示生成多个不同的回答序列，以便后续进行组内比较并计算相对优势。在 Verl 中，这一数量由配置文件 (\texttt{ppo\_trainer.yaml}) 中的 \texttt{actor\_rollout\_ref.rollout.n} 参数控制。该参数值（在本研究中，我们设置为 $K=7$，对应 \texttt{num\_rollout\_samples\_per\_prompt=7}）在 \texttt{ActorRolloutRefWorker} 的 \texttt{\_build\_rollout} 方法中被传递给具体的 \texttt{Rollout} 实现（例如 \texttt{vLLMRollout}）。因此，对于每个提示，策略模型 $\pi_{\theta}$ 会并行生成 $K$ 个不同的回答序列。在生成过程中，我们设定了生成温度 (temperature) 为 1.0，以增加样本的多样性。
+
+    \item \textbf{奖励计算}:
+    对每个生成的回答序列 ($K$个中的每一个)，根据预设的格式奖励和准确性奖励规则（如第 \ref{subsection:reward_function} 节所述，请将 \ref{subsection:reward_function} 替换为实际的奖励函数描述小节号）计算其标量奖励值 $r_i$。
+
+    \item \textbf{数据存储与格式化}:
+    收集到的完整经验数据包括：原始提示、所有 $K$ 个生成的回答序列、每个回答序列中各词元 (token) 的对数概率 (log-probabilities from the policy model)、注意力掩码 (attention mask) 以及对应的标量奖励值。这些数据被统一格式化后，共同构成了后续优势计算和策略更新步骤所需的训练批次。在本研究中，我们将提示的最大长度限制为512个词元，响应的最大长度限制为2048个词元。
+\end{itemize}
+% ... (前文关于经验收集的部分) ...
+
+\paragraph{3. 对数概率计算 (Log Probability Calculation):}
+在收集到经验数据后，下一步是为这些数据计算在当前策略和参照策略下的对数概率 (log probabilities)。这些对数概率是后续计算优势函数和策略损失的关键输入。
+\begin{itemize}
+    \item \textbf{旧策略的对数概率 ($\text{old\_log\_prob}$)}: 对于经验收集阶段生成的每个回答序列（prompt + response），需要计算其在生成该序列的策略模型（即当前迭代中更新前的 Actor Model, $\pi_{\theta_{\text{old}}}$）下的对数概率。在 Verl 中，这一步通常通过 \texttt{ActorRolloutRefWorker} 的 \texttt{compute\_log\_prob} 等类似接口完成，它会对整个批次的 (prompt, response) 对重新进行一次前向传播。
+    您可能会问，为何不在序列生成（Rollout）阶段直接保存每个词元的对数概率？原因有二：其一，高效的序列生成框架（如 vLLM）为了推理速度，可能不会默认保存所有词元的完整对数概率，或仅保存整个序列的对数似然；其二，正如 vLLM 官方文档所指出，由于 PyTorch 的数值不稳定性以及并发批处理策略，实时生成的词元级对数概率可能存在微小波动。为了保证训练过程中对数概率的确定性和稳定性，通常需要使用已确定的词元序列再次进行前向传播计算。此时的 Actor Model 尚未更新，因此其计算出的对数概率代表了“旧”策略。
+
+    \item \textbf{参照策略的对数概率 ($\text{ref\_log\_prob}$)}: 类似地，参照策略模型 (Reference Model, $\pi_{\text{ref}}$，通常是强化学习开始前 Actor Model 的初始版本或SFT版本) 也会对同一批数据计算其对数概率。在 Verl 中，这对应于 \texttt{RefPolicyWorker} 的 \texttt{compute\_ref\_log\_prob} 等接口。参照对数概率主要用于后续计算 KL 散度，以约束 Actor Model 的更新幅度，防止其与初始的稳定策略偏离过远。在第一个训练迭代开始时，Actor Model 与 Ref Model 相同，因此 $\text{old\_log\_prob}$ 与 $\text{ref\_log\_prob}$ 相等。
+\end{itemize}
+
+\paragraph{4. 奖励计算与优势函数估计 (Reward Calculation and Advantage Estimation):}
+此阶段的核心是评估已生成回答序列的质量，并据此计算优势函数 $A(x, y_i)$，用于指导策略模型的更新方向。
+\begin{itemize}
+    \item \textbf{奖励信号的获取}: Verl 支持灵活配置奖励来源。它可以调用外部的奖励模型 (Reward Model, RM) 来对 (prompt, response) 对打分（例如通过 \texttt{rm\_wg.compute\_rm\_score(batch)}）。同时，Verl 也允许集成基于规则的奖励函数或自定义的评分逻辑（例如通过 \texttt{compute\_reward\_async} 或 \texttt{compute\_reward} 接口）。在本研究中，我们主要使用第 \ref{subsection:reward_function} 节（请替换为实际章节号）所述的格式奖励与准确性奖励。Verl 会将来自不同来源的奖励信号进行整合。
+
+    \item \textbf{优势函数的计算}: 获得每个回答的标量奖励后，Verl 使用 \texttt{compute\_advantage} 函数来计算其优势值。对于 GRPO 算法，优势的计算不依赖于传统的价值函数网络，而是基于组内（同一 prompt 生成的 $K$ 个样本）奖励的相对比较，如公式 (Y) （请替换为GRPO优势计算公式编号）所示。此函数会考虑配置的优势估计算法类型 (\texttt{adv\_estimator})、折扣因子 $\gamma$ (\texttt{gamma})、GAE参数 $\lambda$ (\texttt{lam})（如果使用GAE）、每组的样本数 $K$ (\texttt{num\_repeat}，即本研究中的7）以及GRPO特有的优势标准化选项 (\texttt{norm\_adv\_by\_std\_in\_grpo})。
+\end{itemize}
+
+\paragraph{5. 策略更新 (Policy Update - Inner Loop via Mini-batches):}
+这是 GRPO 算法中 Actor Model 参数 $\theta$ 进行优化的核心步骤。在 Verl 中，此过程由 \texttt{ActorRolloutRefWorker} 的 \texttt{update\_actor(batch)} 方法触发，并通常包含一个内部的“小循环”，即对整个批次的数据划分为多个小批量 (mini-batches) 进行迭代训练。
+
+对于每个小批量数据，执行以下计算：
+\begin{itemize}
+    \item \textbf{新策略的对数概率 ($\text{new\_log\_prob}$)}: 当前（正在更新的）Actor Model $\pi_{\theta}$ 对小批量中的 (prompt, response) 数据进行前向传播，计算得到新的对数概率。在第一个小循环迭代时，由于模型参数尚未改变，$\text{new\_log\_prob}$ 与 $\text{old\_log\_prob}$ 相同。
+
+    \item \textbf{策略梯度损失 (Policy Gradient Loss, $\text{pg\_loss}$)}: 这是策略损失的主要部分，衡量了当前策略 $\pi_{\theta}$ 相对于旧策略 $\pi_{\theta_{\text{old}}}$，在当前优势函数 $A(x, y_i)$ 指导下的改进程度。Verl 中的 \texttt{compute\_policy\_loss} 函数根据 GRPO 的目标函数（如公式 (Z)，请替换为GRPO策略更新目标公式编号）计算此损失。该函数会使用 $\text{old\_log\_prob}$、$\text{new\_log\_prob}$、计算得到的优势 $A(x, y_i)$、回答序列的掩码 (\texttt{response\_mask}) 以及 PPO/GRPO 特有的裁剪参数（如 \texttt{cliprange}, \texttt{cliprange\_low}, \texttt{cliprange\_high}, \texttt{clip\_ratio\_c}）来计算截断的策略梯度目标。
+
+    \item \textbf{熵损失 (Entropy Loss)}: 为了鼓励策略的探索性，通常会引入策略分布的熵作为正则化项。熵衡量了策略选择下一个词元时不确定性的程度。熵损失由策略输出的对数概率计算得到，并乘以一个熵系数 (\texttt{entropy\_coeff}) 后从策略梯度损失中减去（或加上，取决于符号约定）。Verl 的 \texttt{compute\_policy\_loss} 或其后续步骤会包含此计算。
+
+    \item \textbf{KL散度损失 (KL Divergence Loss)}: 为防止更新后的策略与参照策略（通常是初始的、较稳定的策略）偏离过远，会计算当前策略 $\pi_{\theta}$（由 $\text{new\_log\_prob}$ 代表）与参照策略 $\pi_{\text{ref}}$（由 $\text{ref\_log\_prob}$ 代表）之间的 KL 散度。此 KL 散度值乘以一个系数 (\texttt{kl\_loss\_coef}) 后加到总的策略损失中。
+
+    \item \textbf{总损失计算与参数更新}: 将上述各项损失（策略梯度损失、熵损失的调整部分、KL散度损失）结合起来形成最终的损失函数值。然后，通过调用 \texttt{loss.backward()} 计算梯度，并由优化器 (Optimizer) 更新 Actor Model 的网络参数。
+\end{itemize}
+这个小批量更新循环会持续进行，直到处理完当前大批次 (batch) 中的所有小批量数据。完成一轮 Actor Model 的训练后，其更新后的权重会在下一个大的训练迭代开始前，通过前述的权重同步机制（如 \texttt{RolloutShardingManager}）传递给负责经验收集的 Rollout 组件，用以生成下一批基于最新策略的经验数据。
+
+\subsubsection{蒸馏设置}
+我们利用LlamaFactory（Zheng等，2024）将推理模式从DeepSeek-R1提炼出来。在实验过程中，我们使用R1的所有响应（包括答案不正确的响应）训练模型。我们观察到，与仅使用正确的响应相比，这种设置会导致卓越的性能。该模型接受了2个时期的训练，其批量大小为32，上下文长度为4096。我们采用了 $1 \times 10^{-5}$ 的学习率，结合了余弦学习率调度程序和 $10\%$ 的热量。
+
+\subsection{Metric评测}
+由于每个MCQ+示例都有一个或多个答案，因此我们评估了实例和选项级别的性能。给定的答案 $y^{(i)}_{\text{pred}}$ 和地面真相 $y^{(i)}_{\text{gold}}$ 对于第 $i$ 个问题，两个指标表示如下：
+
+\textbf{精确匹配（实例级）}：这衡量了预测答案与正确答案完全匹配的实例的比例。
+$$ \text{精确匹配} = \frac{1}{N} \sum_{i=1}^{N} \mathbf{1}(y^{(i)}_{\text{pred}} = y^{(i)}_{\text{gold}}) $$
+其中 $\mathbf{1}(\cdot)$ 是指示函数，如果内部的条件为true，则等于1，否则为0。它评估模型是否可以为问题提供完全正确的答案。对于MCQ+，这意味着预测的选项集合与真实的选项集合完全一致。
+
+\textbf{召回和精确度（选择级）}：我们根据模型对单个答案选项的预测来计算召回和精度得分。
+令 $N$ 为问题总数。对于第 $i$ 个问题，令 $P_i$ 为模型预测的正确选项集合，$G_i$ 为实际的正确选项集合。
+则选项级别的精确度 (Precision) 和召回率 (Recall) 定义为：
+$$ \text{Precision}_{\text{option}} = \frac{\sum_{i=1}^N |P_i \cap G_i|}{\sum_{i=1}^N |P_i|} $$
+$$ \text{Recall}_{\text{option}} = \frac{\sum_{i=1}^N |P_i \cap G_i|}{\sum_{i=1}^N |G_i|} $$
+其中 $|S|$ 表示集合 $S$ 的基数。如果某个问题模型没有预测任何选项（即 $|P_i|=0$），则该问题对精确度的分子和分母的贡献均为0。
+通常也会计算 F1 分数：
+$$ F1_{\text{option}} = 2 \cdot \frac{\text{Precision}_{\text{option}} \cdot \text{Recall}_{\text{option}}}{\text{Precision}_{\text{option}} + \text{Recall}_{\text{option}}} $$
+
+\section{进一步的实验思路与尝试}
+\begin{enumerate}[label=\arabic*.]
+    \item \textbf{对于强化学习方法的各种尝试}
+    \item \textbf{尝试不加入format reward}
+    0.564333017975402
+    \item \textbf{对于reward function的构建和尝试}
+    \begin{itemize}
+        \item 最开始使用的是完全匹配，只有回答和正确答案完全一致时，得分为1，否则为0。即：
+        $$ R_{\text{exact}}(S_{\text{pred}}, S_{\text{true}}) = \begin{cases} 1 & \text{if } S_{\text{pred}} = S_{\text{true}} \\ 0 & \text{otherwise} \end{cases} $$
+        \item 之后我尝试了对于选错、漏选情况适量给分，完全一致时为1，在此基础上每选择一个错误选项或者漏选一个正确选项则扣 $x$ 分，考虑到希望模型不要学习到short cut有意的少选或者多选，$x$ 应该大于等于0.5。
+        令 $FP = |S_{\text{pred}} \setminus S_{\text{true}}|$ (错误选择的选项数) 且 $FN = |S_{\text{true}} \setminus S_{\text{pred}}|$ (漏选的正确选项数)。
+        则部分奖励 $R_{\text{partial}}$ 可以定义为：
+        $$ R_{\text{partial}}(S_{\text{pred}}, S_{\text{true}}) = \max(0, 1 - x \cdot (FP + FN)) $$
+        其中 $x \ge 0.5$。
+    \end{itemize}
+    \item \textbf{对于数据的修改和清洗}
+    \item \textbf{收集合适的SFT训练数据并且进行SFT}
+    \item \textbf{其他实验方向}
+    \begin{enumerate}[label=\arabic*.]
+        \item qwen2.5 grpo hard
+        \item soft 0.1 0.3 0.5 0.7 0.9 (可能是指部分奖励中的扣分系数 $x$ 或奖励的平滑化参数)
+        \item 0.9 0.5638599810785241
+        \item no format (不使用格式奖励的实验)
+        \item Dr grpo (可能是 DeepSpeed-Chat GRPO 或其他变体)
+        \item DAPO
+        \item VAPO (Value-Augmented Policy Optimization 或其他)
+        \item 清洗排序数据
+        \item 蒸馏 + RL
+        \item zero + RL (zero-shot prompting + RL)
+        \item length 方面 (对生成长度的控制或分析)
+        \item maybe
+        \begin{itemize}
+            \item Second RL (第二阶段RL)
+            \item LCPO (Likelihood Clipped Policy Optimization 或其他)
+        \end{itemize}
+    \end{enumerate}
+\end{enumerate}
+
+\printbibliography
+\end{document}

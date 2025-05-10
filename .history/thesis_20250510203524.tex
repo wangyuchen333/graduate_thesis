@@ -310,9 +310,6 @@ $$ F1_{\text{option}} = 2 \cdot \frac{\text{Precision}_{\text{option}} \cdot \te
         $$ R_{\text{partial}}(S_{\text{pred}}, S_{\text{true}}) = \max(0, 1 - x \cdot (FP + FN)) $$
         其中 $x \ge 0.5$。
         当x为0.9的时候，测试集的accuracy为0.5638599810785241    
-        qwen2.5-7b-grpo-mcq val-core/jec-qa-1-multi-choice/acc/mean@1	0.575958353052532
-        0.5 qwen2.5-7b-grpo-mcq val-core/jec-qa-1-multi-choice/acc/mean@1	0.5617605300520587
-
     \end{itemize}
     \item \textbf{蒸馏}
     我首先尝试的是采用DeepSeek-R1-Distill-Qwen-7B进行测试，我希望通过蒸馏后的qwen能学习到long COT的推理路径形成正确的推理以及探索。
